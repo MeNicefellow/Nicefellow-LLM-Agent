@@ -1,7 +1,5 @@
 from flask import Flask, render_template, request, jsonify
 from agent import Agent
-import subprocess
-import requests
 
 app = Flask(__name__)
 
@@ -20,11 +18,16 @@ def create_agent():
 
 @app.route('/next_action', methods=['GET'])
 def next_action():
-    action = agent.next_action()
-    return jsonify({"action": action})
+    if agent:
+        action = agent.next_action()
+        return jsonify(action)
+    return jsonify(None)
 
 @app.route('/execute_action', methods=['POST'])
 def execute_action():
+    if not agent:
+        return jsonify({"error": "No agent created"}), 400
+    
     action = request.json['action']
     allowed = request.json['allowed']
     
@@ -35,20 +38,6 @@ def execute_action():
         return jsonify({"result": result, "agent": agent.to_dict()})
     else:
         return jsonify({"result": "Action not allowed", "agent": agent.to_dict()})
-
-def execute_python_code(code):
-    try:
-        result = subprocess.run(['python', '-c', code], capture_output=True, text=True, timeout=10)
-        return result.stdout
-    except subprocess.TimeoutExpired:
-        return "Execution timed out"
-    except Exception as e:
-        return str(e)
-
-def search_duckduckgo(query):
-    url = f"https://api.duckduckgo.com/?q={query}&format=json"
-    response = requests.get(url)
-    return response.json()
 
 if __name__ == '__main__':
     app.run(debug=True)

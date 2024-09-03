@@ -1,5 +1,6 @@
 from utils import llm_chatter
 import json
+import requests
 
 class Agent:
     def __init__(self, goal):
@@ -24,7 +25,6 @@ class Agent:
         try:
             return json.loads(response)
         except json.JSONDecodeError:
-            # If JSON parsing fails, return a default profile
             return {
                 "name": "Default Agent",
                 "expertise": "General problem-solving",
@@ -33,26 +33,55 @@ class Agent:
 
     def create_plan(self):
         prompt = f"""Create a detailed plan to achieve the following goal: {self.goal}.
-        Provide a list of steps as a JSON array. For example:
-        ["Step 1: Analyze the problem", "Step 2: Research possible solutions", "Step 3: Implement the best solution"]
+        Provide the plan as a JSON array of step descriptions. For example:
+        [
+            "Research current market trends",
+            "Analyze historical stock data",
+            "Develop a prediction model",
+            "Test the model with recent data",
+            "Generate growth predictions"
+        ]
         Provide only the JSON array in your response, with no additional text."""
         
         response = self.llm.communicate(prompt)
         try:
             return json.loads(response)
         except json.JSONDecodeError:
-            # If JSON parsing fails, return a default plan
-            return ["Analyze the goal", "Research solutions", "Implement the best solution"]
+            return ["Research the problem", "Analyze available data", "Develop a solution", "Test the solution", "Present results"]
 
     def next_action(self):
         if self.current_step < len(self.plan):
-            return self.plan[self.current_step]
+            step = self.plan[self.current_step]
+            prompt = f"""For the following step in our plan: "{step}"
+            Determine if this step requires Python code execution or a DuckDuckGo search.
+            If it requires Python code, provide the exact code to execute.
+            If it requires a search, provide the exact search query to use.
+            Return your response as a JSON object with the following structure:
+            {{
+                "type": "python" or "search",
+                "description": "Brief description of the action",
+                "code": "Python code to execute" (only if type is "python"),
+                "query": "Search query to use" (only if type is "search")
+            }}
+            Provide only the JSON object in your response, with no additional text."""
+            
+            response = self.llm.communicate(prompt)
+            try:
+                return json.loads(response)
+            except json.JSONDecodeError:
+                return {"type": "search", "description": step, "query": f"{step} related to {self.goal}"}
         return None
 
     def execute_action(self, action):
-        # Implement action execution logic here
-        # For now, we'll just return a placeholder result
-        return f"Executed action: {action}"
+        if action['type'] == 'python':
+            # In a real-world scenario, you'd want to add more security measures here
+            result = exec_python_code(action['code'])
+        elif action['type'] == 'search':
+            result = search_duckduckgo(action['query'])
+        else:
+            result = "Unknown action type"
+        
+        return result
 
     def update_memory(self, action, result):
         self.memory.append({"action": action, "result": result})
@@ -65,3 +94,18 @@ class Agent:
             "plan": self.plan,
             "current_step": self.current_step
         }
+
+def exec_python_code(code):
+    # This is a simplified version. In a real-world scenario, you'd want to add more security measures
+    try:
+        exec_globals = {}
+        exec(code, exec_globals)
+        return str(exec_globals.get('result', 'Code executed successfully'))
+    except Exception as e:
+        return f"Error executing code: {str(e)}"
+
+def search_duckduckgo(query):
+    url = f"https://api.duckduckgo.com/?q={query}&format=json"
+    response = requests.get(url)
+    data = response.json()
+    return data.get('Abstract', 'No results found')

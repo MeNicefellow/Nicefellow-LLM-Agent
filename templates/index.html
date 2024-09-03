@@ -7,6 +7,22 @@
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .left-column {
+            flex: 2;
+        }
+        .right-column {
+            flex: 1;
+        }
         .profile-item, .memory-item, .plan-item {
             margin-bottom: 10px;
         }
@@ -28,6 +44,32 @@
             white-space: pre-wrap;
             word-wrap: break-word;
         }
+        .feedback-section, .conclusion-section, .decision-section {
+            margin-top: 20px;
+            border-top: 1px solid #ccc;
+            padding-top: 20px;
+        }
+        .decision {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+        }
+        .memory-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 100vh;
+            overflow-y: auto;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .adjust-action-form {
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -35,58 +77,106 @@
         <h1>LLM Agent System</h1>
         <div v-if="!agent">
             <input v-model="goal" placeholder="Enter the agent's goal">
+            <select v-model="selectedBackend">
+                <option value="llm_chatter">Default Backend (llm_chatter)</option>
+                <option value="openai">OpenAI</option>
+            </select>
             <button @click="createAgent">Create Agent</button>
         </div>
-        <div v-else>
-            <h2>Agent Profile</h2>
-            <div v-if="agent.profile">
-                <div class="profile-item">
-                    <span class="profile-label">Name:</span> {{ '{{ agent.profile.name }}' }}
+        <div v-else class="container">
+            <div class="left-column">
+                <h2>Agent Profile</h2>
+                <div v-if="agent.profile">
+                    <div class="profile-item">
+                        <span class="profile-label">Name:</span> {{ '{{ agent.profile.name }}' }}
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-label">Expertise:</span> {{ '{{ agent.profile.expertise }}' }}
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-label">Traits:</span>
+                        <ul class="trait-list">
+                            <li v-for="trait in agent.profile.traits">{{ '{{ trait }}' }}</li>
+                        </ul>
+                    </div>
                 </div>
-                <div class="profile-item">
-                    <span class="profile-label">Expertise:</span> {{ '{{ agent.profile.expertise }}' }}
+                
+                <h2>Plan</h2>
+                <ol>
+                    <li v-for="(step, index) in agent.plan" :key="index" :class="{ 'current-step': index === agent.current_step }">
+                        {{ '{{ step }}' }}
+                    </li>
+                </ol>
+                
+                <h2>Next Action</h2>
+                <div v-if="nextAction">
+                    <p><strong>Type:</strong> {{ '{{ nextAction.type }}' }}</p>
+                    <p><strong>Description:</strong> {{ '{{ nextAction.description }}' }}</p>
+                    <div v-if="nextAction.type === 'python'">
+                        <p><strong>Python Code:</strong></p>
+                        <pre>{{ '{{ nextAction.code }}' }}</pre>
+                    </div>
+                    <div v-if="nextAction.type === 'search'">
+                        <p><strong>Search Query:</strong> {{ '{{ nextAction.query }}' }}</p>
+                    </div>
+                    <div v-if="nextAction.type === 'ask_llm'">
+                        <p><strong>Question for LLM:</strong> {{ '{{ nextAction.question }}' }}</p>
+                    </div>
+                    <div class="action-buttons">
+                        <button @click="executeAction(true)">Allow</button>
+                        <button @click="executeAction(false)">Deny</button>
+                        <button @click="showAdjustForm = true">Adjust Action</button>
+                    </div>
+                    <div v-if="showAdjustForm" class="adjust-action-form">
+                        <textarea v-model="adjustmentInput" rows="4" cols="50" placeholder="Provide information to adjust the action..."></textarea>
+                        <button @click="adjustAction">Submit Adjustment</button>
+                    </div>
                 </div>
-                <div class="profile-item">
-                    <span class="profile-label">Traits:</span>
-                    <ul class="trait-list">
-                        <li v-for="trait in agent.profile.traits">{{ '{{ trait }}' }}</li>
+                <p v-else>No more actions to execute.</p>
+                
+                <div class="conclusion-section">
+                    <h2>Generate Conclusion</h2>
+                    <button @click="generateConclusion" :disabled="!allActionsCompleted">Generate Conclusion</button>
+                    
+                    <div v-if="conclusion">
+                        <h3>Conclusion</h3>
+                        <pre>{{ '{{ conclusion }}' }}</pre>
+                    </div>
+                </div>
+                
+                <div class="feedback-section">
+                    <h2>Provide Feedback</h2>
+                    <textarea v-model="feedback" rows="4" cols="50" placeholder="Enter your feedback here..."></textarea>
+                    <button @click="submitFeedback">Submit Feedback</button>
+                </div>
+                
+                <div v-if="decision" class="decision-section">
+                    <h3>Decision based on feedback:</h3>
+                    <p><strong>Decision:</strong> {{ '{{ decision.decision }}' }}</p>
+                    <p><strong>Reasoning:</strong> {{ '{{ decision.reasoning }}' }}</p>
+                    <div v-if="decision.decision !== 'continue'">
+                        <h4>Updated Plan:</h4>
+                        <ol>
+                            <li v-for="(step, index) in agent.plan" :key="index">{{ '{{ step }}' }}</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="right-column">
+                <div class="memory-section">
+                    <h2>Memory</h2>
+                    <ul v-if="agent.memory && agent.memory.length > 0">
+                        <li v-for="(item, index) in agent.memory" :key="index" class="memory-item">
+                            <span class="memory-label">Action:</span><br>
+                            <pre>{{ '{{ JSON.stringify(item.action, null, 2) }}' }}</pre>
+                            <span class="memory-label">Result:</span><br>
+                            <pre>{{ '{{ item.result }}' }}</pre>
+                        </li>
                     </ul>
+                    <p v-else>No actions performed yet.</p>
                 </div>
             </div>
-            
-            <h2>Plan</h2>
-            <ol class="plan-list">
-                <li v-for="(step, index) in agent.plan" :key="index" :class="{ 'current-step': index === agent.current_step }">
-                    {{ '{{ step }}' }}
-                </li>
-            </ol>
-            
-            <h2>Memory</h2>
-            <ul v-if="agent.memory && agent.memory.length > 0">
-                <li v-for="(item, index) in agent.memory" :key="index" class="memory-item">
-                    <span class="memory-label">Action:</span><br>
-                    <pre>{{ '{{ JSON.stringify(item.action, null, 2) }}' }}</pre>
-                    <span class="memory-label">Result:</span><br>
-                    <pre>{{ '{{ item.result }}' }}</pre>
-                </li>
-            </ul>
-            <p v-else>No actions performed yet.</p>
-            
-            <h2>Next Action</h2>
-            <div v-if="nextAction">
-                <p><strong>Type:</strong> {{ '{{ nextAction.type }}' }}</p>
-                <p><strong>Description:</strong> {{ '{{ nextAction.description }}' }}</p>
-                <div v-if="nextAction.type === 'python'">
-                    <p><strong>Python Code:</strong></p>
-                    <pre>{{ '{{ nextAction.code }}' }}</pre>
-                </div>
-                <div v-if="nextAction.type === 'search'">
-                    <p><strong>Search Query:</strong> {{ '{{ nextAction.query }}' }}</p>
-                </div>
-                <button @click="executeAction(true)">Allow</button>
-                <button @click="executeAction(false)">Deny</button>
-            </div>
-            <p v-else>No more actions to execute.</p>
         </div>
     </div>
     
@@ -96,11 +186,22 @@
             data: {
                 agent: null,
                 goal: '',
-                nextAction: null
+                selectedBackend: 'llm_chatter',
+                nextAction: null,
+                conclusion: null,
+                feedback: '',
+                decision: null,
+                showAdjustForm: false,
+                adjustmentInput: ''
+            },
+            computed: {
+                allActionsCompleted() {
+                    return this.agent && this.agent.current_step >= this.agent.plan.length;
+                }
             },
             methods: {
                 createAgent() {
-                    axios.post('/create_agent', { goal: this.goal })
+                    axios.post('/create_agent', { goal: this.goal, backend: this.selectedBackend })
                         .then(response => {
                             this.agent = response.data;
                             this.getNextAction();
@@ -116,7 +217,43 @@
                     axios.post('/execute_action', { action: this.nextAction, allowed: allowed })
                         .then(response => {
                             this.agent = response.data.agent;
+                            this.nextAction = response.data.next_action;
+                        })
+                        .catch(error => {
+                            console.error('Error executing action:', error);
+                        });
+                },
+                generateConclusion() {
+                    axios.get('/generate_conclusion')
+                        .then(response => {
+                            this.conclusion = response.data.conclusion;
+                        })
+                        .catch(error => {
+                            console.error('Error generating conclusion:', error);
+                        });
+                },
+                submitFeedback() {
+                    axios.post('/process_feedback', { feedback: this.feedback })
+                        .then(response => {
+                            this.decision = response.data.decision;
+                            this.agent = response.data.agent;
+                            this.feedback = '';
                             this.getNextAction();
+                        })
+                        .catch(error => {
+                            console.error('Error submitting feedback:', error);
+                        });
+                },
+                adjustAction() {
+                    axios.post('/adjust_action', { user_input: this.adjustmentInput })
+                        .then(response => {
+                            this.nextAction = response.data.updated_action;
+                            this.agent = response.data.agent;
+                            this.showAdjustForm = false;
+                            this.adjustmentInput = '';
+                        })
+                        .catch(error => {
+                            console.error('Error adjusting action:', error);
                         });
                 }
             }

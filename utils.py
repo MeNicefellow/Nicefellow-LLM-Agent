@@ -10,7 +10,7 @@ class llm_chatter:
         self.headers = {
             "Content-Type": "application/json"
         }
-    def communicate(self,prompt,greedy=False,reset=False,max_tokens=2048,template="Llama-v3"):
+    def communicate(self,prompt,greedy=True,reset=False,max_tokens=2048,template="Llama-v3"):
         if reset:
             self.msg_history = []
         self.msg_history.append({"role": "user", "content": prompt})
@@ -28,7 +28,7 @@ class llm_chatter:
         return answer
 
 class llm_completion:
-    def __init__(self,host='http://127.0.0.1:1234/v1/completions'):
+    def __init__(self,host='http://127.0.0.1:5000/v1/completions'):
         self.host = host
         self.headers = {
             "Content-Type": "application/json"

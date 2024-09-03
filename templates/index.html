@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Agent System</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        .profile-item, .memory-item {
+            margin-bottom: 10px;
+        }
+        .profile-label, .memory-label {
+            font-weight: bold;
+        }
+        .trait-list, .plan-list {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .current-step {
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>LLM Agent System</h1>
+        <div v-if="!agent">
+            <input v-model="goal" placeholder="Enter the agent's goal">
+            <button @click="createAgent">Create Agent</button>
+        </div>
+        <div v-else>
+            <h2>Agent Profile</h2>
+            <div v-if="agent.profile">
+                <div class="profile-item">
+                    <span class="profile-label">Name:</span> {{ '{{ agent.profile.name }}' }}
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Expertise:</span> {{ '{{ agent.profile.expertise }}' }}
+                </div>
+                <div class="profile-item">
+                    <span class="profile-label">Traits:</span>
+                    <ul class="trait-list">
+                        <li v-for="trait in agent.profile.traits">{{ '{{ trait }}' }}</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <h2>Plan</h2>
+            <ol class="plan-list">
+                <li v-for="(step, index) in agent.plan" :key="index" :class="{ 'current-step': index === agent.current_step }">
+                    {{ '{{ step }}' }}
+                </li>
+            </ol>
+            
+            <h2>Memory</h2>
+            <ul v-if="agent.memory.length > 0">
+                <li v-for="(item, index) in agent.memory" :key="index" class="memory-item">
+                    <span class="memory-label">Action:</span> {{ '{{ item.action }}' }}<br>
+                    <span class="memory-label">Result:</span> {{ '{{ item.result }}' }}
+                </li>
+            </ul>
+            <p v-else>No actions performed yet.</p>
+            
+            <h2>Next Action</h2>
+            <p>{{ '{{ nextAction }}' }}</p>
+            <button @click="executeAction(true)">Allow</button>
+            <button @click="executeAction(false)">Deny</button>
+        </div>
+    </div>
+    
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                agent: null,
+                goal: '',
+                nextAction: ''
+            },
+            methods: {
+                createAgent() {
+                    axios.post('/create_agent', { goal: this.goal })
+                        .then(response => {
+                            this.agent = response.data;
+                            this.getNextAction();
+                        });
+                },
+                getNextAction() {
+                    axios.get('/next_action')
+                        .then(response => {
+                            this.nextAction = response.data.action;
+                        });
+                },
+                executeAction(allowed) {
+                    axios.post('/execute_action', { action: this.nextAction, allowed: allowed })
+                        .then(response => {
+                            this.agent = response.data.agent;
+                            this.getNextAction();
+                        });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

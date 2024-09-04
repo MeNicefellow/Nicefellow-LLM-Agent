@@ -7,6 +7,10 @@ import requests
 from bs4 import BeautifulSoup
 import io
 import types
+import os
+from datetime import datetime
+import subprocess
+import shlex
 
 class PersistentPythonEnvironment:
     def __init__(self):
@@ -42,19 +46,30 @@ class PersistentPythonEnvironment:
             return not isinstance(obj, (types.FunctionType, types.ModuleType, type))
 
         local_vars = {k: str(v) for k, v in self.locals.items() if is_simple_variable(v)}
-        print("local_vars:",local_vars)
+        #print("local_vars:",local_vars)
         return local_vars#{k: str(v) for k, v in {**self.globals, **self.locals}.items()}
 
 class Agent:
-    def __init__(self, goal, backend_name='openai'):  # Changed default to 'openai'
+    def __init__(self, goal, backend_name='openai'):
         self.main_llm = get_llm_backend(backend_name)
         self.single_llm = get_llm_backend(backend_name)
         self.goal = goal
         self.profile = self.create_profile()
         self.memory = []
+        self.project_folder = self.create_project_folder()
         self.plan = self.create_plan()
         self.current_step = 0
         self.python_env = PersistentPythonEnvironment()
+        self.next_action = self.generate_next_action()  # Generate the first action
+
+    def create_project_folder(self):
+        base_folder = "./workspace"
+        if not os.path.exists(base_folder):
+            os.makedirs(base_folder)
+        project_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
+        project_folder = os.path.join(base_folder, f"project_{project_datetime}")
+        os.makedirs(project_folder)
+        return project_folder
 
     def create_plan(self):
         prompt = f"""Create a high-level plan to achieve the following goal: {self.goal}.
@@ -96,7 +111,7 @@ class Agent:
                 "traits": ["adaptive", "analytical", "persistent"]
             }
 
-    def next_action(self):
+    def generate_next_action(self):
         print(f"-=-=-=-=-=-=-=-=-=-=Current step: {self.current_step}")
         if self.current_step < len(self.plan):
             step_description = self.plan[self.current_step]
@@ -112,14 +127,22 @@ If you believe the current step has been accomplished, respond with: {{"type": "
 
 Otherwise, specify the action as a JSON object with the following structure:
 {{
-    "type": "python" or "search" or "ask_llm" or "adjust_plan" or "visit_page",
+    "type": "python" or "search" or "ask_llm" or "adjust_plan" or "visit_page" or "writetofile" or "command",
     "description": "Detailed description of the action",
     "code": "Python code to execute" (only if type is "python"),
     "query": "Search query to use" (only if type is "search"),
     "question": "Question to ask the LLM" (only if type is "ask_llm"),
     "adjustment_prompt": "Prompt for plan adjustment" (only if type is "adjust_plan"),
-    "url": "URL to visit" (only if type is "visit_page")
+    "url": "URL to visit" (only if type is "visit_page"),
+    "file_path": "Relative path of the file to write" (only if type is "writetofile"),
+    "file_content": "Content to write to the file" (only if type is "writetofile"),
+    "command": "Shell command to execute" (only if type is "command")
 }}
+
+Note: 
+- For the "writetofile" action, the file_path should be relative to the project folder. All files will be written within the folder: {self.project_folder}
+- For the "command" action, the command will be executed in the project folder: {self.project_folder}. Be cautious with system commands and avoid destructive operations.
+
 Provide only the JSON object in your response, with no additional text."""
 
             response = self.main_llm.communicate(prompt)
@@ -127,17 +150,18 @@ Provide only the JSON object in your response, with no additional text."""
                 action = json.loads(response)
                 if action.get("type") == "step_completed":
                     self.current_step += 1
-                    return self.next_action()
+                    return self.generate_next_action()
                 return action
             except json.JSONDecodeError:
                 return None
         return {"type": "plan_completed", "description": "All steps in the plan have been completed."}
 
     def execute_action(self, action):
+        print("action:",action)
         print(f"Executing action: {action['type']} - {action['description']}", file=sys.stderr)
         if action['type'] == 'python':
             result = self.python_env.execute(action['code'])
-            print(f"Python environment state: {self.python_env.get_state()}", file=sys.stderr)
+            #print(f"Python environment state: {self.python_env.get_state()}", file=sys.stderr)
         elif action['type'] == 'search':
             result = search_duckduckgo(action['query'])
         elif action['type'] == 'ask_llm':
@@ -152,10 +176,14 @@ Given the above context, please answer the following question:
             result = self.adjust_plan(action['adjustment_prompt'])
         elif action['type'] == 'visit_page':
             result = self.visit_page(action['url'])
+        elif action['type'] == 'writetofile':
+            result = self.write_to_file(action['file_path'], action['file_content'])
+        elif action['type'] == 'command':
+            result = self.execute_command(action['command'])
         else:
             result = f"Unknown action type: {action['type']}"
         
-        print(f"Action result: {result}", file=sys.stderr)
+        #print(f"Action result: {result}", file=sys.stderr)
         self.update_memory(action, result)
         return result
 
@@ -229,7 +257,7 @@ Return the adjusted plan as a JSON array of strings, starting from the current s
 
         response = self.main_llm.communicate(prompt)
         self.plan[self.current_step] = response.strip()
-        return self.next_action()
+        return self.generate_next_action()
     def visit_page(self, url):
         try:
             response = requests.get(url)
@@ -288,7 +316,9 @@ Return the adjusted plan as a JSON array of strings, starting from the current s
         self.memory.append({"action": action, "result": result})
 
     def generate_conclusion(self):
-        prompt = f"""Based on the following goal and actions taken, generate a brief and concise conclusion to the task the user asked.
+        prompt = f"""Based on the following goal and actions taken, generate a brief and concise conclusion.
+        If the goal was to find or calculate something, just provide the result.
+        If it was a research task, summarize the main finding in one sentence.
 
         Goal: {self.goal}
 
@@ -307,11 +337,38 @@ Return the adjusted plan as a JSON array of strings, starting from the current s
             "profile": self.profile,
             "memory": self.memory,
             "plan": self.plan,
-            "current_step": self.current_step
+            "current_step": self.current_step,
+            "project_folder": self.project_folder,
+            "next_action": self.next_action  # Include the next_action in the dictionary
         }
 
     def is_plan_completed(self):
         return self.current_step >= len(self.plan)
+
+    def write_to_file(self, relative_path, content):
+        full_path = os.path.join(self.project_folder, relative_path)
+        try:
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, 'w') as f:
+                f.write(content)
+            return f"File successfully written to {relative_path}"
+        except Exception as e:
+            return f"Error writing to file {relative_path}: {str(e)}"
+
+    def execute_command(self, command):
+        try:
+            # Use shlex.split to properly handle command arguments
+            args = shlex.split(command)
+            # Execute the command in the project folder
+            process = subprocess.Popen(args, cwd=self.project_folder, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            stdout, stderr = process.communicate()
+            
+            if process.returncode == 0:
+                return f"Command executed successfully. Output:\n{stdout}"
+            else:
+                return f"Command failed with return code {process.returncode}. Error:\n{stderr}"
+        except Exception as e:
+            return f"Error executing command: {str(e)}"
 
 def exec_python_code(code):
     # This is a simplified version. In a real-world scenario, you'd want to add more security measures

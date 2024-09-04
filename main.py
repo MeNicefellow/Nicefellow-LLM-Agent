@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 from agent import Agent
 import traceback
+import os
 
 app = Flask(__name__)
 
@@ -21,7 +22,7 @@ def create_agent():
 @app.route('/next_action', methods=['GET'])
 def next_action():
     if agent:
-        action = agent.next_action()
+        action = agent.generate_next_action()
         return jsonify(action)
     return jsonify(None)
 
@@ -48,7 +49,7 @@ def execute_action():
             if completion_status['completed']:
                 agent.current_step += 1
             
-            next_action = agent.next_action()
+            next_action = agent.generate_next_action()
             
             return jsonify({
                 "result": result,
@@ -58,7 +59,7 @@ def execute_action():
                 "plan_completed": agent.is_plan_completed()
             })
         else:
-            next_action = agent.next_action()
+            next_action = agent.generate_next_action()
             return jsonify({
                 "result": "Action not allowed",
                 "agent": agent.to_dict(),
@@ -95,6 +96,20 @@ def adjust_action():
     user_input = request.json['user_input']
     updated_action = agent.adjust_current_action(user_input)
     return jsonify({"updated_action": updated_action, "agent": agent.to_dict()})
+
+@app.route('/get_project_files', methods=['GET'])
+def get_project_files():
+    if not agent:
+        return jsonify({"error": "No agent created"}), 400
+    
+    project_files = []
+    for root, dirs, files in os.walk(agent.project_folder):
+        for file in files:
+            full_path = os.path.join(root, file)
+            relative_path = os.path.relpath(full_path, agent.project_folder)
+            project_files.append(relative_path)
+    
+    return jsonify({"project_files": project_files})
 
 if __name__ == '__main__':
     app.run(debug=True)

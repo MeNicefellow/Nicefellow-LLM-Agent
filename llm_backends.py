@@ -24,10 +24,11 @@ class OpenAIBackend:
             self.conversation_history = []
 
         self.conversation_history.append({"role": "user", "content": prompt})
-        #print("="*10)
+        print("="*10)
         #print("conversation_history:")
         #for item in self.conversation_history:
         #    print('---\n',item['role'],item['content'])
+        print('---\n',self.conversation_history[-1]['role'],self.conversation_history[-1]['content'])
         #print("="*10)
 
         try:

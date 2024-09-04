@@ -146,6 +146,28 @@
             max-height: 80vh;
             overflow-y: auto;
         }
+        .project-files {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .project-files h3 {
+            margin-top: 0;
+        }
+        .project-files ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .command-output {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
     </style>
 </head>
 <body>
@@ -190,6 +212,9 @@
                     <p><strong>Current Step:</strong> {{ '{{ agent.plan[agent.current_step] }}' }}</p>
                     <p><strong>Type:</strong> {{ '{{ nextAction.type }}' }}</p>
                     <p><strong>Description:</strong> {{ '{{ nextAction.description }}' }}</p>
+                    <div v-if="nextAction.type === 'command'">
+                        <p><strong>Command:</strong> {{ '{{ nextAction.command }}' }}</p>
+                    </div>
                     <div v-if="nextAction.type === 'python'">
                         <p><strong>Python Code:</strong></p>
                         <pre>{{ '{{ nextAction.code }}' }}</pre>
@@ -206,10 +231,16 @@
                     <div v-if="nextAction.type === 'visit_page'">
                         <p><strong>URL to Visit:</strong> {{ '{{ nextAction.url }}' }}</p>
                     </div>
+                    <div v-if="nextAction.type === 'writetofile'">
+                        <p><strong>File Path:</strong> {{ '{{ nextAction.file_path }}' }}</p>
+                        <p><strong>File Content:</strong></p>
+                        <pre>{{ '{{ nextAction.file_content }}' }}</pre>
+                    </div>
                     <div class="action-buttons">
                         <button @click="executeAction(true)" class="btn btn-secondary">Allow</button>
                         <button @click="executeAction(false)" class="btn btn-danger">Deny</button>
                         <button @click="showAdjustForm = true" class="btn btn-warning">Adjust Action</button>
+                        <button @click="allowAll" class="btn btn-primary" :disabled="isAllowAllDisabled">Allow All</button>
                     </div>
                     <div v-if="showAdjustForm" class="adjust-action-form">
                         <textarea v-model="adjustmentInput" rows="4" placeholder="Provide information to adjust the action..."></textarea>
@@ -254,17 +285,26 @@
                         </ol>
                     </div>
                 </div>
+                
+                <div class="project-files">
+                    <h3>Project Files</h3>
+                    <button @click="refreshProjectFiles" class="btn btn-secondary">Refresh Files</button>
+                    <ul>
+                        <li v-for="file in projectFiles" :key="file">{{ '{{ file }}' }}</li>
+                    </ul>
+                </div>
             </div>
             
             <div class="right-column">
-                <div class="memory-section">
+                <div class="memory-section" ref="memorySection">
                     <h2>Memory</h2>
                     <ul v-if="agent.memory && agent.memory.length > 0">
                         <li v-for="(item, index) in agent.memory" :key="index" class="memory-item">
                             <span class="memory-label">Action:</span><br>
                             <pre>{{ '{{ JSON.stringify(item.action, null, 2) }}' }}</pre>
                             <span class="memory-label">Result:</span><br>
-                            <pre>{{ '{{ item.result }}' }}</pre>
+                            <div v-if="item.action.type === 'command'" class="command-output">{{ '{{ item.result }}' }}</div>
+                            <pre v-else>{{ '{{ item.result }}' }}</pre>
                         </li>
                     </ul>
                     <p v-else>No actions performed yet.</p>
@@ -287,11 +327,16 @@
                 decision: null,
                 showAdjustForm: false,
                 adjustmentInput: '',
-                planCompleted: false
+                planCompleted: false,
+                isAllowingAll: false,
+                projectFiles: []
             },
             computed: {
                 allActionsCompleted() {
                     return this.planCompleted;
+                },
+                isAllowAllDisabled() {
+                    return this.isAllowingAll || this.planCompleted;
                 }
             },
             methods: {
@@ -299,26 +344,46 @@
                     axios.post('/create_agent', { goal: this.goal, backend: this.selectedBackend })
                         .then(response => {
                             this.agent = response.data;
-                            this.getNextAction();
-                        });
-                },
-                getNextAction() {
-                    axios.get('/next_action')
-                        .then(response => {
-                            this.nextAction = response.data;
+                            this.nextAction = this.agent.next_action;
+                            this.refreshProjectFiles();
+                        })
+                        .catch(error => {
+                            console.error('Error creating agent:', error);
+                            alert('An error occurred while creating the agent. Please try again.');
                         });
                 },
                 executeAction(allowed) {
-                    axios.post('/execute_action', { action: this.nextAction, allowed: allowed })
+                    return axios.post('/execute_action', { action: this.nextAction, allowed: allowed })
                         .then(response => {
                             this.agent = response.data.agent;
                             this.nextAction = response.data.next_action;
                             this.completionStatus = response.data.completion_status;
                             this.planCompleted = response.data.plan_completed;
+                            this.refreshProjectFiles();
+                            this.$nextTick(() => {
+                                this.scrollMemoryToBottom();
+                            });
                         })
                         .catch(error => {
                             console.error('Error executing action:', error);
+                            this.isAllowingAll = false;
                         });
+                },
+                allowAll() {
+                    this.isAllowingAll = true;
+                    this.executeAllActions();
+                },
+                executeAllActions() {
+                    if (this.nextAction && this.nextAction.type !== 'plan_completed') {
+                        this.executeAction(true).then(() => {
+                            this.$nextTick(() => {
+                                this.executeAllActions();
+                            });
+                        });
+                    } else {
+                        this.isAllowingAll = false;
+                        this.generateConclusion();
+                    }
                 },
                 generateConclusion() {
                     axios.get('/generate_conclusion')
@@ -335,7 +400,6 @@
                             this.decision = response.data.decision;
                             this.agent = response.data.agent;
                             this.feedback = '';
-                            this.getNextAction();
                         })
                         .catch(error => {
                             console.error('Error submitting feedback:', error);
@@ -352,7 +416,25 @@
                         .catch(error => {
                             console.error('Error adjusting action:', error);
                         });
+                },
+                scrollMemoryToBottom() {
+                    const memorySection = this.$refs.memorySection;
+                    if (memorySection) {
+                        memorySection.scrollTop = memorySection.scrollHeight;
+                    }
+                },
+                refreshProjectFiles() {
+                    axios.get('/get_project_files')
+                        .then(response => {
+                            this.projectFiles = response.data.project_files;
+                        })
+                        .catch(error => {
+                            console.error('Error refreshing project files:', error);
+                        });
                 }
+            },
+            updated() {
+                this.scrollMemoryToBottom();
             }
         });
     </script>

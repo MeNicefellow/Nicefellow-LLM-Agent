@@ -75,9 +75,15 @@
             font-weight: bold;
             color: #34495e;
         }
+        .plan-step {
+            padding: 5px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
         .current-step {
             font-weight: bold;
-            color: #3498db;
+            background-color: #e0f0ff;
+            border: 1px solid #3498db;
         }
         pre {
             background-color: #f8f9fa;
@@ -87,40 +93,54 @@
             word-wrap: break-word;
             font-size: 14px;
         }
+        .btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: background-color 0.3s, opacity 0.3s;
+        }
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+        .btn-secondary {
+            background-color: #2ecc71;
+            color: white;
+        }
+        .btn-danger {
+            background-color: #e74c3c;
+            color: white;
+        }
+        .btn-warning {
+            background-color: #f39c12;
+            color: white;
+        }
+        .btn:hover {
+            opacity: 0.8;
+        }
+        .btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
         .action-buttons {
             display: flex;
             gap: 10px;
             margin-top: 15px;
         }
-        .action-buttons button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s;
+        .conclusion-section, .feedback-section {
+            margin-top: 20px;
         }
-        .action-buttons button:nth-child(1) {
-            background-color: #2ecc71;
-            color: white;
-        }
-        .action-buttons button:nth-child(2) {
-            background-color: #e74c3c;
-            color: white;
-        }
-        .action-buttons button:nth-child(3) {
-            background-color: #f39c12;
-            color: white;
-        }
-        .action-buttons button:hover {
-            opacity: 0.9;
-        }
-        .adjust-action-form textarea {
+        textarea {
             width: 100%;
-            margin-top: 10px;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
+            margin-bottom: 10px;
         }
         .memory-section {
             max-height: 80vh;
@@ -134,10 +154,10 @@
         <div v-if="!agent" class="input-form">
             <input v-model="goal" placeholder="Enter the agent's goal">
             <select v-model="selectedBackend">
-                <option value="llm_chatter">Default Backend (llm_chatter)</option>
-                <option value="openai">OpenAI</option>
+                <option value="openai">OpenAI (Default)</option>
+                <option value="llm_chatter">LLM Chatter</option>
             </select>
-            <button @click="createAgent">Create Agent</button>
+            <button @click="createAgent" class="btn btn-primary">Create Agent</button>
         </div>
         <div v-else class="agent-interface">
             <div class="left-column">
@@ -159,13 +179,15 @@
                 
                 <h2>Plan</h2>
                 <ol>
-                    <li v-for="(step, index) in agent.plan" :key="index" :class="{ 'current-step': index === agent.current_step }">
+                    <li v-for="(step, index) in agent.plan" :key="index" 
+                        :class="['plan-step', { 'current-step': index === agent.current_step }]">
                         {{ '{{ step }}' }}
                     </li>
                 </ol>
                 
                 <h2>Next Action</h2>
-                <div v-if="nextAction">
+                <div v-if="nextAction && nextAction.type !== 'plan_completed'">
+                    <p><strong>Current Step:</strong> {{ '{{ agent.plan[agent.current_step] }}' }}</p>
                     <p><strong>Type:</strong> {{ '{{ nextAction.type }}' }}</p>
                     <p><strong>Description:</strong> {{ '{{ nextAction.description }}' }}</p>
                     <div v-if="nextAction.type === 'python'">
@@ -178,21 +200,36 @@
                     <div v-if="nextAction.type === 'ask_llm'">
                         <p><strong>Question for LLM:</strong> {{ '{{ nextAction.question }}' }}</p>
                     </div>
+                    <div v-if="nextAction.type === 'adjust_plan'">
+                        <p><strong>Adjustment Prompt:</strong> {{ '{{ nextAction.adjustment_prompt }}' }}</p>
+                    </div>
+                    <div v-if="nextAction.type === 'visit_page'">
+                        <p><strong>URL to Visit:</strong> {{ '{{ nextAction.url }}' }}</p>
+                    </div>
                     <div class="action-buttons">
-                        <button @click="executeAction(true)">Allow</button>
-                        <button @click="executeAction(false)">Deny</button>
-                        <button @click="showAdjustForm = true">Adjust Action</button>
+                        <button @click="executeAction(true)" class="btn btn-secondary">Allow</button>
+                        <button @click="executeAction(false)" class="btn btn-danger">Deny</button>
+                        <button @click="showAdjustForm = true" class="btn btn-warning">Adjust Action</button>
                     </div>
                     <div v-if="showAdjustForm" class="adjust-action-form">
                         <textarea v-model="adjustmentInput" rows="4" placeholder="Provide information to adjust the action..."></textarea>
-                        <button @click="adjustAction">Submit Adjustment</button>
+                        <button @click="adjustAction" class="btn btn-primary">Submit Adjustment</button>
                     </div>
                 </div>
-                <p v-else>No more actions to execute.</p>
+                <p v-else-if="nextAction && nextAction.type === 'plan_completed'">{{ '{{ nextAction.description }}' }}</p>
+                <p v-else>Error: No action available.</p>
+                
+                <div v-if="completionStatus" class="completion-status">
+                    <h3>Step Completion Status</h3>
+                    <p><strong>Completed:</strong> {{ '{{ completionStatus.completed }}' }}</p>
+                    <p><strong>Reasoning:</strong> {{ '{{ completionStatus.reasoning }}' }}</p>
+                </div>
                 
                 <div class="conclusion-section">
                     <h2>Generate Conclusion</h2>
-                    <button @click="generateConclusion" :disabled="!allActionsCompleted">Generate Conclusion</button>
+                    <button @click="generateConclusion" :disabled="!allActionsCompleted" class="btn btn-primary">
+                        Generate Conclusion
+                    </button>
                     
                     <div v-if="conclusion">
                         <h3>Conclusion</h3>
@@ -203,7 +240,7 @@
                 <div class="feedback-section">
                     <h2>Provide Feedback</h2>
                     <textarea v-model="feedback" rows="4" placeholder="Enter your feedback here..."></textarea>
-                    <button @click="submitFeedback">Submit Feedback</button>
+                    <button @click="submitFeedback" class="btn btn-primary">Submit Feedback</button>
                 </div>
                 
                 <div v-if="decision" class="decision-section">
@@ -242,17 +279,19 @@
             data: {
                 agent: null,
                 goal: '',
-                selectedBackend: 'llm_chatter',
+                selectedBackend: 'openai',
                 nextAction: null,
+                completionStatus: null,
                 conclusion: null,
                 feedback: '',
                 decision: null,
                 showAdjustForm: false,
-                adjustmentInput: ''
+                adjustmentInput: '',
+                planCompleted: false
             },
             computed: {
                 allActionsCompleted() {
-                    return this.agent && this.agent.current_step >= this.agent.plan.length;
+                    return this.planCompleted;
                 }
             },
             methods: {
@@ -274,6 +313,8 @@
                         .then(response => {
                             this.agent = response.data.agent;
                             this.nextAction = response.data.next_action;
+                            this.completionStatus = response.data.completion_status;
+                            this.planCompleted = response.data.plan_completed;
                         })
                         .catch(error => {
                             console.error('Error executing action:', error);

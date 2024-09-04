@@ -24,9 +24,11 @@ class OpenAIBackend:
             self.conversation_history = []
 
         self.conversation_history.append({"role": "user", "content": prompt})
-        print("="*10)
-        print("conversation_history:",self.conversation_history)
-        print("="*10)
+        #print("="*10)
+        #print("conversation_history:")
+        #for item in self.conversation_history:
+        #    print('---\n',item['role'],item['content'])
+        #print("="*10)
 
         try:
             response = self.client.chat.completions.create(
@@ -34,6 +36,9 @@ class OpenAIBackend:
                 messages=self.conversation_history
             )
             assistant_message = response.choices[0].message.content.strip()
+            print("*"*10)
+            print("assistant_message:\n",assistant_message)
+            print("*"*10)
             if assistant_message.startswith("```json\n") and assistant_message.endswith("```"):
                 assistant_message = assistant_message[len("```json\n"):-len("```")]
             self.conversation_history.append({"role": "assistant", "content": assistant_message})

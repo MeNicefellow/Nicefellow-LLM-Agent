@@ -3,6 +3,10 @@ from llm_backends import get_llm_backend
 import json
 import sys
 from duckduckgo_search import DDGS
+import requests
+from bs4 import BeautifulSoup
+import io
+import types
 
 class PersistentPythonEnvironment:
     def __init__(self):
@@ -10,17 +14,39 @@ class PersistentPythonEnvironment:
         self.locals = {}
 
     def execute(self, code):
+        old_stdout = sys.stdout
+        redirected_output = io.StringIO()
+        sys.stdout = redirected_output
+
         try:
             exec(code, self.globals, self.locals)
-            return "Code executed successfully"
+            output = redirected_output.getvalue()
+            result = {
+                "status": "success",
+                "output": output,
+                "state": self.get_state()
+            }
         except Exception as e:
-            return f"Error executing code: {str(e)}"
+            result = {
+                "status": "error",
+                "error_message": str(e),
+                "state": self.get_state()
+            }
+        finally:
+            sys.stdout = old_stdout
+
+        return result
 
     def get_state(self):
-        return {**self.globals, **self.locals}
+        def is_simple_variable(obj):
+            return not isinstance(obj, (types.FunctionType, types.ModuleType, type))
+
+        local_vars = {k: str(v) for k, v in self.locals.items() if is_simple_variable(v)}
+        print("local_vars:",local_vars)
+        return local_vars#{k: str(v) for k, v in {**self.globals, **self.locals}.items()}
 
 class Agent:
-    def __init__(self, goal, backend_name):
+    def __init__(self, goal, backend_name='openai'):  # Changed default to 'openai'
         self.main_llm = get_llm_backend(backend_name)
         self.single_llm = get_llm_backend(backend_name)
         self.goal = goal
@@ -29,6 +55,26 @@ class Agent:
         self.plan = self.create_plan()
         self.current_step = 0
         self.python_env = PersistentPythonEnvironment()
+
+    def create_plan(self):
+        prompt = f"""Create a high-level plan to achieve the following goal: {self.goal}.
+        Provide a list of steps, each with a brief description of what needs to be done.
+        You can include steps to adjust the plan or visit web pages if necessary.
+        Return the plan as a JSON array of strings. For example:
+        [
+            "Research current market trends",
+            "Analyze competitor strategies",
+            "Adjust plan based on findings",
+            "Visit product website for detailed information",
+            "Draft initial marketing plan"
+        ]
+        Provide only the JSON array in your response, with no additional text."""
+        
+        response = self.main_llm.communicate(prompt)
+        try:
+            return json.loads(response)
+        except json.JSONDecodeError:
+            return ["Research the problem"]
 
     def create_profile(self):
         prompt = f"""Create a profile for an AI agent with the goal: {self.goal}. Include name, expertise, and key traits.
@@ -50,50 +96,42 @@ class Agent:
                 "traits": ["adaptive", "analytical", "persistent"]
             }
 
-    def create_plan(self):
-        prompt = f"""Create a high-level plan to achieve the following goal: {self.goal}.
-        Provide a list of steps, each with a brief description of what needs to be done.
-        At each step, you will be allowed to choose between python, search, or ask_llm to analyze the obtained information from the previous steps.
-        Do not specify the exact type of action (python, search, or ask_llm) at this stage.
-        Return the plan as a JSON array of strings. For example:
-        [
-            "Research current market trends",
-            "Analyze competitor strategies",
-            "Identify potential target audience",
-            "Draft initial marketing plan"
-        ]
-        Provide only the JSON array in your response, with no additional text."""
-        
-        response = self.main_llm.communicate(prompt)
-        try:
-            return json.loads(response)
-        except json.JSONDecodeError:
-            return ["Research the problem"]
-
     def next_action(self):
+        print(f"-=-=-=-=-=-=-=-=-=-=Current step: {self.current_step}")
         if self.current_step < len(self.plan):
             step_description = self.plan[self.current_step]
-            prompt = f"""Based on the following step in our plan, determine the most appropriate action to take:
+            context = self.get_memory_context()
+            prompt = f"""Context:
+{context}
 
-            Step: {step_description}
-            Current Goal: {self.goal}
+Current Goal: {self.goal}
+Current Step: {step_description}
 
-            Specify the action as a JSON object with the following structure:
-            {{
-                "type": "python" or "search" or "ask_llm",
-                "description": "Detailed description of the action",
-                "code": "Python code to execute" (only if type is "python"),
-                "query": "Search query to use" (only if type is "search"),
-                "question": "Question to ask the LLM" (only if type is "ask_llm")
-            }}
-            Provide only the JSON object in your response, with no additional text."""
+Based on the current step and context, determine the next action to take.
+If you believe the current step has been accomplished, respond with: {{"type": "step_completed"}}
+
+Otherwise, specify the action as a JSON object with the following structure:
+{{
+    "type": "python" or "search" or "ask_llm" or "adjust_plan" or "visit_page",
+    "description": "Detailed description of the action",
+    "code": "Python code to execute" (only if type is "python"),
+    "query": "Search query to use" (only if type is "search"),
+    "question": "Question to ask the LLM" (only if type is "ask_llm"),
+    "adjustment_prompt": "Prompt for plan adjustment" (only if type is "adjust_plan"),
+    "url": "URL to visit" (only if type is "visit_page")
+}}
+Provide only the JSON object in your response, with no additional text."""
 
             response = self.main_llm.communicate(prompt)
             try:
-                return json.loads(response)
+                action = json.loads(response)
+                if action.get("type") == "step_completed":
+                    self.current_step += 1
+                    return self.next_action()
+                return action
             except json.JSONDecodeError:
                 return None
-        return None
+        return {"type": "plan_completed", "description": "All steps in the plan have been completed."}
 
     def execute_action(self, action):
         print(f"Executing action: {action['type']} - {action['description']}", file=sys.stderr)
@@ -103,12 +141,78 @@ class Agent:
         elif action['type'] == 'search':
             result = search_duckduckgo(action['query'])
         elif action['type'] == 'ask_llm':
-            result = self.single_llm.communicate(action['question'], reset=True)
+            context = self.get_memory_context()
+            question = f"""Context:
+{context}
+
+Given the above context, please answer the following question:
+{action['question']}"""
+            result = self.single_llm.communicate(question, reset=True)
+        elif action['type'] == 'adjust_plan':
+            result = self.adjust_plan(action['adjustment_prompt'])
+        elif action['type'] == 'visit_page':
+            result = self.visit_page(action['url'])
         else:
             result = f"Unknown action type: {action['type']}"
         
         print(f"Action result: {result}", file=sys.stderr)
+        self.update_memory(action, result)
         return result
+
+    def check_step_completion(self, action_result):
+        context = self.get_memory_context()
+        current_step = self.plan[self.current_step]
+        prompt = f"""Context:
+{context}
+
+Current Goal: {self.goal}
+Current Step: {current_step}
+Last Action Result: {action_result}
+
+Based on the context, current step, and the result of the last action, determine if the current step has been accomplished.
+Respond with a JSON object in the following format:
+{{
+    "completed": true or false,
+    "reasoning": "Explanation for why the step is completed or not"
+}}
+Provide only the JSON object in your response, with no additional text."""
+
+        response = self.main_llm.communicate(prompt)
+        try:
+            completion_status = json.loads(response)
+            return completion_status
+        except json.JSONDecodeError:
+            return {"completed": False, "reasoning": "Error parsing LLM response"}
+
+    def adjust_plan(self, adjustment_prompt):
+        context = self.get_memory_context()
+        prompt = f"""Context:
+{context}
+
+Current plan:
+{json.dumps(self.plan, indent=2)}
+
+Current step: {self.current_step}
+
+Based on the above context and the following prompt, adjust the remaining steps of the plan:
+{adjustment_prompt}
+
+Return the adjusted plan as a JSON array of strings, starting from the current step."""
+
+        response = self.main_llm.communicate(prompt)
+        try:
+            adjusted_plan = json.loads(response)
+            self.plan = self.plan[:self.current_step] + adjusted_plan
+            return f"Plan adjusted. New plan: {json.dumps(self.plan, indent=2)}"
+        except json.JSONDecodeError:
+            return "Failed to adjust the plan due to invalid JSON response."
+
+    def get_memory_context(self):
+        context = "Previous actions and results:\n\n"
+        for item in self.memory:
+            context += f"Action: {json.dumps(item['action'])}\n"
+            context += f"Result: {item['result']}\n\n"
+        return context
 
     def adjust_current_action(self, user_input):
         current_step = self.plan[self.current_step]
@@ -126,7 +230,22 @@ class Agent:
         response = self.main_llm.communicate(prompt)
         self.plan[self.current_step] = response.strip()
         return self.next_action()
-
+    def visit_page(self, url):
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Extract text content
+            text_content = soup.get_text(separator='\n', strip=True)
+            
+            # Truncate if too long
+            max_length = 5000  # Adjust as needed
+            if len(text_content) > max_length:
+                text_content = text_content[:max_length] + "...(truncated)"
+            
+            return f"Content from {url}:\n\n{text_content}"
+        except Exception as e:
+            return f"Error visiting page {url}: {str(e)}"
     def process_feedback(self, feedback):
         prompt = f"""Based on the following goal, current plan, and user feedback, determine if we should:
         1. Continue with the current plan
@@ -169,16 +288,14 @@ class Agent:
         self.memory.append({"action": action, "result": result})
 
     def generate_conclusion(self):
-        prompt = f"""Based on the following goal and actions taken, generate a comprehensive conclusion or final result.
-        If the goal was a programming task, describe the project structure and key components created.
-        If it was a research task, summarize the main findings and insights.
+        prompt = f"""Based on the following goal and actions taken, generate a brief and concise conclusion to the task the user asked.
 
         Goal: {self.goal}
 
         Actions and Results:
         {json.dumps(self.memory, indent=2)}
 
-        Please provide a detailed conclusion that addresses the original goal and synthesizes the information gathered or work completed.
+        Please provide a single sentence or a simple list that directly addresses the original goal.
         """
 
         conclusion = self.main_llm.communicate(prompt)
@@ -193,6 +310,9 @@ class Agent:
             "current_step": self.current_step
         }
 
+    def is_plan_completed(self):
+        return self.current_step >= len(self.plan)
+
 def exec_python_code(code):
     # This is a simplified version. In a real-world scenario, you'd want to add more security measures
     try:
@@ -203,18 +323,18 @@ def exec_python_code(code):
         return f"Error executing code: {str(e)}"
 
 def search_duckduckgo(query):
-    print(f"DuckDuckGo search query: {query}", file=sys.stderr)
+    #print(f"DuckDuckGo search query: {query}", file=sys.stderr)
     results = []
     try:
         with DDGS() as search_engine:
-            for result in search_engine.text(query, safesearch="Off", max_results=3):
+            for result in search_engine.text(query, safesearch="Off", max_results=5):
                 title = result["title"]
                 url = result["href"]
                 result_text = f'*Title*: {title}\n*Body*: {result["body"]}\n*URL*: {url}'
                 results.append(result_text)
         
         final_result = '\n\n'.join(results)
-        print(f"DuckDuckGo search result: {final_result}", file=sys.stderr)
+        #print(f"DuckDuckGo search result: {final_result}", file=sys.stderr)
         return final_result if results else "No results found"
     except Exception as e:
         error_message = f"Error during DuckDuckGo search: {str(e)}"

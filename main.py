@@ -14,7 +14,7 @@ def index():
 def create_agent():
     global agent
     goal = request.json['goal']
-    backend = request.json['backend']
+    backend = request.json.get('backend', 'openai')  # Default to 'openai' if not specified
     agent = Agent(goal, backend)
     return jsonify(agent.to_dict())
 
@@ -43,12 +43,28 @@ def execute_action():
         
         if allowed:
             result = agent.execute_action(action)
-            agent.update_memory(action, result)
-            agent.current_step += 1
+            completion_status = agent.check_step_completion(result)
+            
+            if completion_status['completed']:
+                agent.current_step += 1
+            
             next_action = agent.next_action()
-            return jsonify({"result": result, "agent": agent.to_dict(), "next_action": next_action})
+            
+            return jsonify({
+                "result": result,
+                "completion_status": completion_status,
+                "agent": agent.to_dict(),
+                "next_action": next_action,
+                "plan_completed": agent.is_plan_completed()
+            })
         else:
-            return jsonify({"result": "Action not allowed", "agent": agent.to_dict(), "next_action": agent.next_action()})
+            next_action = agent.next_action()
+            return jsonify({
+                "result": "Action not allowed",
+                "agent": agent.to_dict(),
+                "next_action": next_action,
+                "plan_completed": agent.is_plan_completed()
+            })
     except Exception as e:
         print(f"Error in execute_action: {str(e)}")
         print(traceback.format_exc())

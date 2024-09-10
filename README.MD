@@ -13,6 +13,10 @@ The LLM Agent System is an innovative AI-powered task execution platform that le
 - **Interactive User Interface**: Provides a web-based UI for creating agents, monitoring progress, and intervening when necessary.
 - **Flexible Backend Support**: Supports multiple LLM backends, with OpenAI as the default.
 
+## Web UI Screenshot
+
+![LLM Agent System Web UI](assets/screenshot.png)
+
 ## Run
 
    Run the application:

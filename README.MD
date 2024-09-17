@@ -1,8 +1,16 @@
+Here's the updated README with the note that the other project, [CosmoNicefellowTech](https://github.com/MeNicefellow/CosmoNicefellowTech), is a better option for software development:
+
+---
+
 # LLM Agent System
 
 ## Overview
 
 The LLM Agent System is an innovative AI-powered task execution platform that leverages Large Language Models (LLMs) to autonomously plan and execute complex tasks. This system creates an agent that can break down a given goal into steps, determine appropriate actions, and execute them to achieve the desired outcome.
+
+### ⚠️ Important Note
+
+While the LLM Agent System offers an interesting approach for automating tasks with LLMs, it may not be the best solution for software development or production-level use cases. For a more robust, scalable, and efficient solution tailored for software development, please refer to my other project: [CosmoNicefellowTech](https://github.com/MeNicefellow/CosmoNicefellowTech). It is better suited for these scenarios, offering enhanced capabilities and optimizations for software development tasks.
 
 ## Features
 
@@ -56,14 +64,11 @@ The LLM Agent System is an innovative AI-powered task execution platform that le
 - The system executes Python code and shell commands. Ensure proper security measures are in place when deploying in a production environment.
 - Implement additional validation and sanitization for user inputs and LLM outputs to prevent potential security risks.
 
-
-
 ## Disclaimer
 
-This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software.
+This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort, or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software.
 
 Users are responsible for checking and validating the correctness of their configuration files, safetensor files, and binary files generated using the software. The developers assume no responsibility for any errors, omissions, or other issues coming in these files, or any consequences resulting from the use of these files.
-
 
 ## License
 
@@ -75,4 +80,4 @@ Join our Discord server [here](https://discord.gg/xhcBDEM3).
 
 ## Feeling Generous? 😊
 
-Eager to buy me a cup of 2$ coffe or iced tea?🍵☕ Sure, here is the link: [https://ko-fi.com/drnicefellow](https://ko-fi.com/drnicefellow). Please add a note on which one you want me to drink?
+Eager to buy me a cup of $2 coffee or iced tea? 🍵☕ Sure, here is the link: [https://ko-fi.com/drnicefellow](https://ko-fi.com/drnicefellow). Please add a note on which one you want me to drink?

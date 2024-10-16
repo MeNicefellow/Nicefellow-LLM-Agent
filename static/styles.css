@@ -1,0 +1,159 @@
+<style>
+body {
+    font-family: 'Roboto', sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f2f5;
+    color: #333;
+}
+.container {
+    width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.agent-interface {
+    display: flex;
+    gap: 40px; /* Increased gap for better spacing */
+}
+
+.left-column,
+.right-column {
+    flex: 1; /* Equal width for both columns */
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+h1, h2 {
+    color: #2c3e50;
+}
+.input-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 80vh;
+    text-align: center;
+}
+.input-form input, .input-form select, .input-form button {
+    margin: 10px 0;
+    padding: 10px;
+    width: 300px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+.input-form button {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+.input-form button:hover {
+    background-color: #2980b9;
+}
+.profile-item, .memory-item, .plan-item {
+    margin-bottom: 15px;
+}
+.profile-label, .memory-label, .plan-label {
+    font-weight: bold;
+    color: #34495e;
+}
+.plan-step {
+    padding: 5px;
+    margin: 5px 0;
+    border-radius: 4px;
+}
+.current-step {
+    font-weight: bold;
+    background-color: #e0f0ff;
+    border: 1px solid #3498db;
+}
+pre {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 14px;
+}
+.btn {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+    transition: background-color 0.3s, opacity 0.3s;
+}
+.btn-primary {
+    background-color: #3498db;
+    color: white;
+}
+.btn-secondary {
+    background-color: #2ecc71;
+    color: white;
+}
+.btn-danger {
+    background-color: #e74c3c;
+    color: white;
+}
+.btn-warning {
+    background-color: #f39c12;
+    color: white;
+}
+.btn:hover {
+    opacity: 0.8;
+}
+.btn:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+}
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+.conclusion-section, .feedback-section {
+    margin-top: 20px;
+}
+textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+.memory-section {
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.project-files {
+    margin-top: 20px;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 4px;
+}
+.project-files h3 {
+    margin-top: 0;
+}
+.project-files ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+.command-output {
+    background-color: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+</style>

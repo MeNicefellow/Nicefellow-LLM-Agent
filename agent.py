@@ -158,7 +158,7 @@ Provide only the JSON object in your response, with no additional text."""
 
     def execute_action(self, action):
         print("action:",action)
-        print(f"Executing action: {action['type']} - {action['description']}", file=sys.stderr)
+        #print(f"Executing action: {action['type']} - {action['description']}", file=sys.stderr)
         if action['type'] == 'python':
             result = self.python_env.execute(action['code'])
             #print(f"Python environment state: {self.python_env.get_state()}", file=sys.stderr)
@@ -197,7 +197,7 @@ Current Goal: {self.goal}
 Current Step: {current_step}
 Last Action Result: {action_result}
 
-Based on the context, current step, and the result of the last action, determine if the current step has been accomplished.
+Based on the context, current step, and the result of the last action, determine if the current step has been accomplished. If it cannot be achieved with further trials, please still mark it as completed so as to go to next step.
 Respond with a JSON object in the following format:
 {{
     "completed": true or false,

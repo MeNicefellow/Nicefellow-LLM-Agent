@@ -17,32 +17,38 @@
              color: #333;
              box-sizing: border-box;
          }
-         .container {
-             width: 100%; /* Full width of the viewport */
-             margin: 0 auto;
-             padding: 20px;
-         }
+.container {
+    max-width: 100%; /* Full width of the viewport */
+    margin: 0 auto;
+    padding: 20px;
+}
 
-         .agent-interface {
-             display: flex;
-             gap: 20px; /* Adjust gap as needed */
-         }
+.agent-interface {
+    display: flex;
+    gap: 20px;
+    flex-wrap: nowrap; /* Prevent columns from wrapping on larger screens */
+}
 
-         .left-column {
-             flex-basis: 50%; /* Make the left column take up more space */
-             background-color: white;
-             padding: 20px;
-             border-radius: 8px;
-             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-         }
+.left-column, .right-column {
+    flex: 1; /* Allow both columns to take equal space */
+    min-width: 0; /* Allow the columns to shrink */
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
 
-         .right-column {
-             flex-basis: 50%; /* Make the right column take less space */
-             background-color: white;
-             padding: 20px;
-             border-radius: 8px;
-             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-         }
+/* Adjust layout on smaller screens */
+@media (max-width: 768px) {
+    .agent-interface {
+        flex-direction: column; /* Stack columns vertically on smaller screens */
+    }
+    .left-column, .right-column {
+        width: 100%; /* Ensure columns take up full width on small screens */
+    }
+}
+
+
 
          h1, h2 {
              color: #2c3e50;

@@ -197,7 +197,7 @@ Current Goal: {self.goal}
 Current Step: {current_step}
 Last Action Result: {action_result}
 
-Based on the context, current step, and the result of the last action, determine if the current step has been accomplished. If it cannot be achieved with further trials, please still mark it as completed so as to go to next step.
+Based on the context, current step, and the result of the last action, determine if the current step has been accomplished. If it cannot be achieved for any reason including technical reasons, please still mark it as completed so as to go to next step.
 Respond with a JSON object in the following format:
 {{
     "completed": true or false,

@@ -46,6 +46,7 @@
 
          h1, h2 {
              color: #2c3e50;
+             text-align: center;
          }
          .input-form {
              display: flex;
@@ -182,13 +183,24 @@
              white-space: pre-wrap;
              word-wrap: break-word;
          }
+         .input-form textarea {
+             margin: 10px 0;
+             padding: 20px; /* Adjust padding for more internal space */
+             width: 500px; /* Increase the width */
+             height: 300px; /* Adjust height as needed */
+             border: 1px solid #ddd;
+             border-radius: 4px;
+             font-size: 16px;
+             resize: none; /* Disable resizing */
+         }
+
     </style>
 </head>
 <body>
     <div id="app" class="container">
         <h1>LLM Agent System</h1>
         <div v-if="!agent" class="input-form">
-            <input v-model="goal" placeholder="Enter the agent's goal">
+            <textarea v-model="goal" placeholder="Enter the agent's goal" rows="10" style="resize: none;"></textarea>
             <select v-model="selectedBackend">
                 <option value="openai">OpenAI (Default)</option>
                 <option value="llm_chatter">LLM Chatter</option>
